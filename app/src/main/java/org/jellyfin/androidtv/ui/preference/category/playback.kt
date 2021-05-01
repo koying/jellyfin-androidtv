@@ -131,7 +131,7 @@ fun OptionsScreen.playbackCategory(
 		setTitle(R.string.pref_use_direct_path_title)
 		setContent(R.string.pref_use_direct_path_summary)
 		bind {
-			get { userPreferences[UserPreferences.externalVideoPlayerSendPath] }
+			get { userPreferences[UserPreferences.videoPlayerSendPath] }
 			set {
 				if (it) {
 					AlertDialog.Builder(activity)
@@ -141,10 +141,10 @@ fun OptionsScreen.playbackCategory(
 						.show()
 				}
 
-				userPreferences[UserPreferences.externalVideoPlayerSendPath] = it
+				userPreferences[UserPreferences.videoPlayerSendPath] = it
 			}
-			default { userPreferences.getDefaultValue(UserPreferences.externalVideoPlayerSendPath) }
+			default { userPreferences.getDefaultValue(UserPreferences.videoPlayerSendPath) }
 		}
-		depends { userPreferences[UserPreferences.videoPlayer] == PreferredVideoPlayer.EXTERNAL }
+		depends { userPreferences[UserPreferences.videoPlayer] != PreferredVideoPlayer.EXOPLAYER }
 	}
 }

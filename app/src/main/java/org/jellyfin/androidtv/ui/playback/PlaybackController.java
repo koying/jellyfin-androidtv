@@ -582,6 +582,18 @@ public class PlaybackController {
         }
     }
 
+    protected static String prepareLocalPath(String rawPath) {
+        if (rawPath == null) return "";
+        String lower = rawPath.toLowerCase();
+        if (!rawPath.contains("://")) {
+            rawPath = rawPath.replace("\\\\",""); // remove UNC prefix if there
+            //prefix with smb
+            rawPath = "smb://"+rawPath;
+        }
+
+        return rawPath.replaceAll("\\\\","/");
+    }
+
     private void startItem(BaseItemDto item, long position, StreamInfo response) {
         mCurrentStreamInfo = response;
         Long mbPos = position * 10000;
@@ -590,6 +602,7 @@ public class PlaybackController {
 
         // Force VLC when media is not live TV and the preferred player is VLC
         boolean forceVlc = !isLiveTv && userPreferences.getValue().get(UserPreferences.Companion.getVideoPlayer()) == PreferredVideoPlayer.VLC;
+        boolean forceLocal = !isLiveTv && userPreferences.getValue().get(UserPreferences.Companion.getVideoPlayerSendPath());
 
         if (forceVlc || (useVlc && (!getPlaybackMethod().equals(PlayMethod.Transcode) || isLiveTv))) {
             Timber.i("Playing back in VLC.");
@@ -612,10 +625,12 @@ public class PlaybackController {
         mSubtitleStreams = response.GetSubtitleProfiles(false, apiClient.getValue().getApiUrl(), apiClient.getValue().getAccessToken());
 
         mFragment.updateDisplay();
-        String path = response.getMediaUrl();
+        String path = forceLocal ? prepareLocalPath(response.getMediaSource().getPath()) : response.getMediaUrl();
+        if (forceLocal)
+            setPlaybackMethod(PlayMethod.DirectPlay);
 
         // when using VLC if source is stereo or we're on the Fire platform with AC3 - use most compatible output
-        if (!mVideoManager.isNativeMode() &&
+        if (!mVideoManager.isNativeMode() && !forceLocal &&
                 ((isLiveTv && DeviceUtils.isFireTv()) ||
                         (response.getMediaSource() != null &&
                                 response.getMediaSource().getDefaultAudioStream() != null &&
