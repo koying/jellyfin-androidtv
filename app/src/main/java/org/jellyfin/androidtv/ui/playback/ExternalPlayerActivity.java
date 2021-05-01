@@ -223,7 +223,7 @@ public class ExternalPlayerActivity extends FragmentActivity {
             final BaseItemDto item = mItemsToPlay.get(mCurrentNdx);
             isLiveTv = item.getBaseItemType() == BaseItemType.TvChannel;
 
-            if (!isLiveTv && userPreferences.getValue().get(UserPreferences.Companion.getExternalVideoPlayerSendPath())) {
+            if (!isLiveTv && userPreferences.getValue().get(UserPreferences.Companion.getVideoPlayerSendPath())) {
                 // Just pass the path directly
                 mCurrentStreamInfo = new StreamInfo();
                 mCurrentStreamInfo.setPlayMethod(PlayMethod.DirectPlay);

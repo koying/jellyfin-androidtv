@@ -97,7 +97,7 @@ class UserPreferences(context: Context) : SharedPreferenceStore(
 		/**
 		 * Send a path instead to the external player
 		 */
-		var externalVideoPlayerSendPath = Preference.boolean("pref_send_path_external", false)
+		var videoPlayerSendPath = Preference.boolean("pref_send_path_external", false)
 
 		/* Playback - Audio related */
 		/**

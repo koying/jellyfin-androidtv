@@ -51,6 +51,11 @@ import org.jellyfin.apiclient.model.mediainfo.SubtitleTrackInfo;
 import org.jellyfin.apiclient.model.session.PlayMethod;
 import org.koin.java.KoinJavaComponent;
 
+import java.io.UnsupportedEncodingException;
+import java.net.URI;
+import java.net.URL;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -686,6 +691,36 @@ public class PlaybackController {
         if (mFragment != null) mFragment.finish();
     }
 
+    protected static String prepareLocalPath(String rawPath) {
+        if (rawPath == null) return "";
+        String lower = rawPath.toLowerCase();
+        if (rawPath.startsWith("\\\\")) {
+            rawPath = rawPath.replace("\\\\",""); // remove UNC prefix if there
+            //prefix with smb
+            rawPath = "smb://" + rawPath.replace("\\","/");
+        }
+        else if (rawPath.startsWith("http"))
+        {
+            try
+            {
+                URL url = new URL(rawPath);
+                URI uri = new URI(url.getProtocol(), url.getUserInfo(), url.getHost(), url.getPort(), url.getPath(), url.getQuery(), url.getRef());
+                rawPath = uri.toString();
+            }
+            catch (Exception e)
+            {
+                e.printStackTrace();
+                return "";
+            }
+        }
+        Timber.d("prepareLocalPath: %s", rawPath);
+
+        if (!rawPath.contains("://"))
+            return "";
+
+        return rawPath;
+    }
+
     private void startItem(BaseItemDto item, long position, StreamInfo response) {
         if (!hasInitializedVideoManager() || !hasFragment()) {
             Timber.d("Error - attempting to play without:%s%s", hasInitializedVideoManager() ? "" : " [videoManager]", hasFragment() ? "" : " [overlay fragment]");
@@ -722,10 +757,12 @@ public class PlaybackController {
 
         // Force VLC when media is not live TV and the preferred player is VLC
         boolean forceVlc = !isLiveTv && userPreferences.getValue().get(UserPreferences.Companion.getVideoPlayer()) == PreferredVideoPlayer.VLC;
+        boolean forceLocal = false;
 
         if (mVideoManager != null && (forceVlc || (useVlc && (!getPlaybackMethod().equals(PlayMethod.Transcode) || isLiveTv)))) {
             Timber.i("Playing back in VLC.");
             mVideoManager.setNativeMode(false);
+            forceLocal = !isLiveTv && userPreferences.getValue().get(UserPreferences.Companion.getVideoPlayerSendPath());
         } else if (mVideoManager != null) {
             mVideoManager.setNativeMode(true);
             Timber.i("Playing back in native mode.");
@@ -741,9 +778,16 @@ public class PlaybackController {
             mVideoManager.setPlaybackSpeed(isLiveTv() ? 1.0 : mRequestedPlaybackSpeed);
 
         if (mFragment != null) mFragment.updateDisplay();
+        String path = forceLocal ? prepareLocalPath(response.getMediaSource().getPath()) : response.getMediaUrl();
+        if (path == "") {
+            forceLocal = false;
+            path = response.getMediaUrl();
+        }
+        if (forceLocal)
+            setPlaybackMethod(PlayMethod.DirectPlay);
 
         // when using VLC if source is stereo or we're on the Fire platform with AC3 - use most compatible output
-        if (mVideoManager != null && !mVideoManager.isNativeMode() &&
+        if (mVideoManager != null && !mVideoManager.isNativeMode() && !forceLocal &&
                 ((isLiveTv && DeviceUtils.isFireTv()) ||
                         (response.getMediaSource() != null &&
                                 response.getMediaSource().getDefaultAudioStream() != null &&
@@ -759,7 +803,7 @@ public class PlaybackController {
         }
 
         if (mVideoManager != null) {
-            mVideoManager.setVideoPath(response.getMediaUrl());
+            mVideoManager.setVideoPath(path);
             mVideoManager.setVideoTrack(response.getMediaSource());
         }
 
