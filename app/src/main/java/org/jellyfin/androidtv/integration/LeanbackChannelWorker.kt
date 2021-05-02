@@ -18,6 +18,7 @@ import org.jellyfin.androidtv.TvApp
 import org.jellyfin.androidtv.preference.UserPreferences
 import org.jellyfin.androidtv.ui.startup.StartupActivity
 import org.jellyfin.androidtv.util.ImageUtils
+import org.jellyfin.androidtv.util.apiclient.getItems
 import org.jellyfin.androidtv.util.apiclient.getLatestItems
 import org.jellyfin.androidtv.util.apiclient.getNextUpEpisodes
 import org.jellyfin.androidtv.util.apiclient.getUserViews
@@ -27,6 +28,8 @@ import org.jellyfin.apiclient.model.drawing.ImageFormat
 import org.jellyfin.apiclient.model.dto.BaseItemDto
 import org.jellyfin.apiclient.model.dto.ImageOptions
 import org.jellyfin.apiclient.model.entities.ImageType
+import org.jellyfin.apiclient.model.entities.LocationType
+import org.jellyfin.apiclient.model.entities.MediaType
 import org.jellyfin.apiclient.model.querying.ItemFields
 import org.jellyfin.apiclient.model.querying.ItemsResult
 import org.jellyfin.apiclient.model.querying.NextUpQuery
@@ -80,6 +83,8 @@ class LeanbackChannelWorker(
 			val latestItems = getLatestItems()
 
 			// Get resumable items
+			val resumeItems = getResumeItems()
+
 			// Delete current items from the My Media and Next Up channels
 			context.contentResolver.delete(TvContractCompat.PreviewPrograms.CONTENT_URI, null, null)
 
@@ -87,7 +92,7 @@ class LeanbackChannelWorker(
 			updateMyMedia()
 			updateLatestItems(latestItems);
 			updateNextUp(nextUpItems)
-			updateWatchNext(nextUpItems)
+			updateWatchNext(resumeItems, nextUpItems)
 
 			// Success!
 			Result.success()
@@ -126,16 +131,16 @@ class LeanbackChannelWorker(
 		return uri
 	}
 
-	/**
+		/**
 	 * Updates the "my media" row with current media libraries
 	 */
 	private suspend fun updateMyMedia() {
 		// Get channel
 		val channelUri = getChannelUri("my_media", Channel.Builder()
-			.setType(TvContractCompat.Channels.TYPE_PREVIEW)
-			.setDisplayName(context.getString(R.string.lbl_my_media))
-			.setAppLinkIntent(Intent(context, StartupActivity::class.java))
-			.build())
+				.setType(TvContractCompat.Channels.TYPE_PREVIEW)
+				.setDisplayName(context.getString(R.string.lbl_my_media))
+				.setAppLinkIntent(Intent(context, StartupActivity::class.java))
+				.build())
 
 		val response = apiClient.getUserViews() ?: return
 
@@ -290,6 +295,32 @@ class LeanbackChannelWorker(
 	}
 
 	/**
+	 * Gets the resumable items or returns null
+	 */
+	private suspend fun getResumeItems(): ItemsResult? = withContext(Dispatchers.Default) {
+		// Get user or return if no user is found (not authenticated)
+		val user = TvApp.getApplication().currentUser ?: return@withContext null
+
+		val query = ItemQuery().apply {
+			mediaTypes = arrayOf(MediaType.Video)
+			recursive = true
+			enableTotalRecordCount = false
+			collapseBoxSetItems = false
+			excludeLocationTypes = arrayOf(LocationType.Virtual)
+			filters = arrayOf(ItemFilter.IsResumable)
+			sortBy = arrayOf(ItemSortBy.DatePlayed)
+			sortOrder = org.jellyfin.apiclient.model.entities.SortOrder.Descending
+		}
+
+		return@withContext apiClient.getItems(query.apply {
+			userId = user?.id
+			imageTypeLimit = 1
+			limit = 5
+			fields = arrayOf(ItemFields.DateCreated)
+		})
+	}
+
+	/**
 	 * Updates the "next up" row with current episodes
 	 * Uses the [nextUpItems] parameter to store items returned by a NextUpQuery()
 	 */
@@ -298,10 +329,10 @@ class LeanbackChannelWorker(
 
 		// Get channel
 		val channelUri = getChannelUri("next_up", Channel.Builder()
-			.setType(TvContractCompat.Channels.TYPE_PREVIEW)
-			.setDisplayName(context.getString(R.string.lbl_next_up))
-			.setAppLinkIntent(Intent(context, StartupActivity::class.java))
-			.build())
+				.setType(TvContractCompat.Channels.TYPE_PREVIEW)
+				.setDisplayName(context.getString(R.string.lbl_next_up))
+				.setAppLinkIntent(Intent(context, StartupActivity::class.java))
+				.build())
 
 		// Add new items
 		nextUpItems?.items?.map { item ->
@@ -337,15 +368,21 @@ class LeanbackChannelWorker(
 	 * Does not include movies, music or other types of media
 	 * Uses the [nextUpItems] parameter to store items returned by a NextUpQuery()
 	 */
-	private suspend fun updateWatchNext(nextUpItems: ItemsResult?) = withContext(Dispatchers.Default) {
+	private suspend fun updateWatchNext(resumeItems: ItemsResult?, nextUpItems: ItemsResult?) = withContext(Dispatchers.Default) {
 		// Delete current items
 		context.contentResolver.delete(WatchNextPrograms.CONTENT_URI, null, null)
 
 		// Add new items
+		resumeItems?.items?.let { items ->
+			context.contentResolver.bulkInsert(
+					WatchNextPrograms.CONTENT_URI,
+					items.map { item -> getBaseItemAsWatchNextProgram(item).toContentValues() }.toTypedArray()
+			)
+		}
 		nextUpItems?.items?.let { items ->
 			context.contentResolver.bulkInsert(
-				WatchNextPrograms.CONTENT_URI,
-				items.map { item -> getBaseItemAsWatchNextProgram(item).toContentValues() }.toTypedArray()
+					WatchNextPrograms.CONTENT_URI,
+					items.map { item -> getBaseItemAsWatchNextProgram(item).toContentValues() }.toTypedArray()
 			)
 		}
 	}
@@ -359,13 +396,28 @@ class LeanbackChannelWorker(
 		val preferParentThumb = userPreferences[UserPreferences.seriesThumbnailsEnabled]
 
 		setInternalProviderId(item.id)
-		setType(WatchNextPrograms.TYPE_TV_EPISODE)
-		setTitle("${item.seriesName} - ${item.name}")
 
-		// Poster image
-		val imageUri = item.getPosterArtImageUrl(preferParentThumb)
-		setPosterArtUri(imageUri)
-		setPosterArtAspectRatio(WatchNextPrograms.ASPECT_RATIO_16_9)
+		when (item.type) {
+			"Movie" -> {
+				setType(WatchNextPrograms.TYPE_MOVIE)
+				setTitle("${item.name}")
+
+				// Poster image
+				val imageUri = item.getPosterArtImageUrl(false)
+				setPosterArtUri(imageUri)
+				setPosterArtAspectRatio(WatchNextPrograms.ASPECT_RATIO_MOVIE_POSTER)
+			}
+
+			else -> {
+				setType(WatchNextPrograms.TYPE_TV_EPISODE)
+				setTitle("${item.seriesName} - ${item.name}")
+
+				// Poster image
+				val imageUri = item.getPosterArtImageUrl(preferParentThumb)
+				setPosterArtUri(imageUri)
+				setPosterArtAspectRatio(WatchNextPrograms.ASPECT_RATIO_16_9)
+			}
+		}
 
 		// Use date created or fallback to current time if unavailable
 		setLastEngagementTimeUtcMillis(item.dateCreated?.time ?: System.currentTimeMillis())
@@ -375,6 +427,7 @@ class LeanbackChannelWorker(
 			item.canResume -> {
 				setWatchNextType(WatchNextPrograms.WATCH_NEXT_TYPE_CONTINUE)
 				setLastPlaybackPositionMillis((item.resumePositionTicks / TICKS_IN_MILLISECOND).toInt())
+				setLastEngagementTimeUtcMillis(item.userData?.lastPlayedDate?.time!!)
 			}
 			// First episode of the season
 			item.indexNumber == 1 -> {

@@ -7,6 +7,7 @@ import org.jellyfin.apiclient.interaction.Response
 import org.jellyfin.apiclient.model.dto.BaseItemDto
 import org.jellyfin.apiclient.model.dto.UserDto
 import org.jellyfin.apiclient.model.querying.ItemsResult
+import org.jellyfin.apiclient.model.querying.ItemQuery
 import org.jellyfin.apiclient.model.querying.NextUpQuery
 import org.jellyfin.apiclient.model.querying.LatestItemsQuery
 
@@ -64,6 +65,17 @@ suspend fun ApiClient.getItem(id: String): BaseItemDto? = suspendCoroutine { con
 		override fun onError(exception: Exception?) = continuation.resume(null)
 	})
 }
+
+/**
+ * Coroutine capable version of the "GetItems" function
+ */
+suspend fun ApiClient.getItems(query: ItemQuery): ItemsResult? = suspendCoroutine { continuation ->
+	GetItemsAsync(query, object : Response<ItemsResult>() {
+		override fun onResponse(response: ItemsResult?) = continuation.resume(response!!)
+		override fun onError(exception: Exception?) = continuation.resume(null)
+	})
+}
+
 
 suspend fun <T : Any?> callApi(init: (callback: Response<T>) -> Unit): T = suspendCoroutine { continuation ->
 	init(object : Response<T>() {
