@@ -18,6 +18,7 @@ import org.jellyfin.androidtv.TvApp
 import org.jellyfin.androidtv.preference.UserPreferences
 import org.jellyfin.androidtv.ui.startup.StartupActivity
 import org.jellyfin.androidtv.util.ImageUtils
+import org.jellyfin.androidtv.util.apiclient.getLatestItems
 import org.jellyfin.androidtv.util.apiclient.getNextUpEpisodes
 import org.jellyfin.androidtv.util.apiclient.getUserViews
 import org.jellyfin.androidtv.util.dp
@@ -65,6 +66,7 @@ class LeanbackChannelWorker(
 	/**
 	 * Update all channels for the currently authenticated user
 	 */
+	@ExperimentalStdlibApi
 	override suspend fun doWork(): Result = when {
 		// Fail when not supported
 		!isSupported -> Result.failure()
@@ -74,11 +76,16 @@ class LeanbackChannelWorker(
 			// Get next up episodes
 			val nextUpItems = getNextUpItems()
 
+			// Get latest movies
+			val latestItems = getLatestItems()
+
+			// Get resumable items
 			// Delete current items from the My Media and Next Up channels
 			context.contentResolver.delete(TvContractCompat.PreviewPrograms.CONTENT_URI, null, null)
 
 			// Update various channels
 			updateMyMedia()
+			updateLatestItems(latestItems);
 			updateNextUp(nextUpItems)
 			updateWatchNext(nextUpItems)
 
@@ -153,6 +160,102 @@ class LeanbackChannelWorker(
 	}
 
 	/**
+	 * Gets the latest items or returns null
+	 */
+	@ExperimentalStdlibApi
+	private suspend fun getLatestItems(): Map<String, ItemsResult?>? = withContext(Dispatchers.Default) {
+		val EXCLUDED_COLLECTION_TYPES = arrayOf("playlists", "livetv", "boxsets", "channels", "books")
+
+		// Get user or return if no user is found (not authenticated)
+		val user = TvApp.getApplication().currentUser ?: return@withContext null
+		val configuration = TvApp.getApplication().currentUser!!.configuration
+		val latestItemsExcludes = configuration.latestItemsExcludes
+
+		val views = apiClient.getUserViews() ?: return@withContext null
+
+		return@withContext buildMap {
+			views.items
+				.filterNot { item -> item.collectionType in EXCLUDED_COLLECTION_TYPES || item.id in latestItemsExcludes }
+				.forEach { item ->
+					// Create query and add it to a new row
+					val query = LatestItemsQuery().apply {
+						imageTypeLimit = 1
+						limit = 25
+						fields = arrayOf(ItemFields.DateCreated, ItemFields.Taglines)
+						parentId = item.id
+						groupItems = true
+					}
+					query.userId = user.id
+					var items = ItemsResult()
+					items.setItems(apiClient.getLatestItems(query))
+					put(item.name, items)
+				}
+		}
+	}
+
+	/**
+	 * Updates the "latest movies" row with current media libraries
+	 */
+	private suspend fun updateLatestItems(latestItems: Map<String, ItemsResult?>?) = withContext(Dispatchers.Default) {
+		if (latestItems != null) {
+			latestItems.forEach { (k, v) ->
+				// Get channel
+				val channelUri = getChannelUri("latest_" + k, Channel.Builder()
+						.setType(TvContractCompat.Channels.TYPE_PREVIEW)
+						.setDisplayName(context.getString(R.string.lbl_latest) + " " + k)
+						.setAppLinkIntent(Intent(context, StartupActivity::class.java))
+						.build())
+
+				// Add new items
+				v?.items?.map { item ->
+					val imageUri = item.getPosterArtImageUrl(false)
+
+					val seasonString = item.parentIndexNumber?.toString().orEmpty()
+
+					val episodeString = when {
+						item.indexNumberEnd != null && item.indexNumber != null ->
+							"${item.indexNumber}-${item.indexNumberEnd}"
+						else -> item.indexNumber?.toString().orEmpty()
+					}
+
+					when (item.type) {
+						"Movie" ->
+							PreviewProgram.Builder()
+									.setChannelId(ContentUris.parseId(channelUri))
+									.setType(WatchNextPrograms.TYPE_MOVIE)
+									.setTitle(item.name)
+									.setDescription(if (item.taglines.size > 0) item.taglines[0] else "")
+									.setPosterArtUri(imageUri)
+									.setPosterArtAspectRatio(TvContractCompat.PreviewPrograms.ASPECT_RATIO_MOVIE_POSTER)
+									.setIntent(Intent(context, StartupActivity::class.java).apply {
+										putExtra(StartupActivity.ITEM_ID, item.id)
+									})
+									.build()
+									.toContentValues()
+						"Episode" ->
+							PreviewProgram.Builder()
+									.setChannelId(ContentUris.parseId(channelUri))
+									.setType(WatchNextPrograms.TYPE_TV_EPISODE)
+									.setTitle(item.seriesName)
+									.setEpisodeTitle(item.name)
+									.setSeasonNumber(seasonString, item.parentIndexNumber ?: 0)
+									.setEpisodeNumber(episodeString, item.indexNumber ?: 0)
+									.setPosterArtUri(imageUri)
+									.setPosterArtAspectRatio(TvContractCompat.PreviewPrograms.ASPECT_RATIO_16_9)
+									.setIntent(Intent(context, StartupActivity::class.java).apply {
+										putExtra(StartupActivity.ITEM_ID, item.id)
+									})
+									.build()
+									.toContentValues()
+						else -> null
+					}
+				}?.filterNotNull()?.let { context.contentResolver.bulkInsert(TvContractCompat.PreviewPrograms.CONTENT_URI, it.toTypedArray()) }
+			}
+		}
+	}
+
+
+	/**
 	 * Gets the poster art for an item
 	 * Uses the [preferParentThumb] parameter to fetch the series image when preferred
 	 */
@@ -167,8 +270,6 @@ class LeanbackChannelWorker(
 		} else {
 			Uri.parse(apiClient.GetImageUrl(this, ImageOptions().apply {
 				format = ImageFormat.Png
-				height = 288
-				width = 512
 			}))
 		}
 	}
