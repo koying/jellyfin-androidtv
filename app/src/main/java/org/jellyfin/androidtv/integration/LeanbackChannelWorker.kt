@@ -23,6 +23,7 @@ import org.jellyfin.androidtv.util.sdk.isUsable
 import org.jellyfin.sdk.api.client.KtorClient
 import org.jellyfin.sdk.api.operations.ImageApi
 import org.jellyfin.sdk.api.operations.TvShowsApi
+import org.jellyfin.sdk.api.operations.UserLibraryApi
 import org.jellyfin.sdk.api.operations.UserViewsApi
 import org.jellyfin.sdk.model.api.*
 import org.jellyfin.sdk.model.serializer.toUUIDOrNull
@@ -50,6 +51,7 @@ class LeanbackChannelWorker(
 
 	private val apiClient by inject<KtorClient>(systemApiClient)
 	private val userViewsApi by lazy { UserViewsApi(apiClient) }
+	private val userLibrarypi by lazy { UserLibraryApi(apiClient) }
 	private val imageApi by lazy { ImageApi(apiClient) }
 	private val tvShowsApi by lazy { TvShowsApi(apiClient) }
 	private val userPreferences by inject<UserPreferences>()
@@ -66,6 +68,7 @@ class LeanbackChannelWorker(
 	/**
 	 * Update all channels for the currently authenticated user.
 	 */
+	@ExperimentalStdlibApi
 	override suspend fun doWork(): Result = when {
 		// Fail when not supported
 		!isSupported -> Result.failure()
@@ -75,11 +78,16 @@ class LeanbackChannelWorker(
 			// Get next up episodes
 			val nextUpItems = getNextUpItems()
 
+			// Get latest movies
+			val latestItems = getLatestItems()
+
+			// Get resumable items
 			// Delete current items from the My Media and Next Up channels
 			context.contentResolver.delete(TvContractCompat.PreviewPrograms.CONTENT_URI, null, null)
 
 			// Update various channels
 			updateMyMedia()
+			updateLatestItems(latestItems);
 			updateNextUp(nextUpItems)
 			updateWatchNext(nextUpItems)
 
@@ -160,6 +168,149 @@ class LeanbackChannelWorker(
 	}
 
 	/**
+	 * Gets the latest items or returns null
+	 */
+	@ExperimentalStdlibApi
+	private suspend fun getLatestItems(): Map<String, List<BaseItemDto>?>? {
+		val EXCLUDED_COLLECTION_TYPES = arrayOf("playlists", "livetv", "boxsets", "channels", "books")
+
+		// Get user or return if no user is found (not authenticated)
+		val configuration = TvApp.getApplication().currentUser!!.configuration
+		val latestItemsExcludes = configuration.latestItemsExcludes
+
+		val user = TvApp.getApplication().currentUser ?: return null
+		val views by userViewsApi.getUserViews(user.id.toUUID(), includeHidden = false)
+
+		return buildMap {
+			views.items
+				.orEmpty()
+				.filterNot { item -> item.collectionType in EXCLUDED_COLLECTION_TYPES || item.id.toString() in latestItemsExcludes }
+				.forEach { item ->
+					// Create query and add it to a new row
+					val items = userLibrarypi.getLatestMedia(
+							userId = TvApp.getApplication().currentUser?.id?.toUUIDOrNull() ?: return null,
+							imageTypeLimit = 1,
+							limit = 25,
+							fields = listOf(ItemFields.DATE_CREATED, ItemFields.TAGLINES),
+							parentId = item.id,
+							groupItems = true
+					)
+					put(item.name!!, items.content)
+				}
+		}
+	}
+
+	/**
+	 * Updates the "latest movies" row with current media libraries
+	 */
+	private suspend fun updateLatestItems(latestItems: Map<String, List<BaseItemDto>?>?) {
+		if (latestItems != null) {
+			latestItems.forEach { (k, v) ->
+				// Get channel
+				val channelUri = getChannelUri("latest_" + k, Channel.Builder()
+						.setType(TvContractCompat.Channels.TYPE_PREVIEW)
+						.setDisplayName(context.getString(R.string.lbl_latest) + " " + k)
+						.setAppLinkIntent(Intent(context, StartupActivity::class.java))
+						.build())
+
+				// Add new items
+				v?.map { item ->
+					val imageUri = item.getPosterArtImageUrl(false)
+
+					val seasonString = item.parentIndexNumber?.toString().orEmpty()
+
+					val episodeString = when {
+						item.indexNumberEnd != null && item.indexNumber != null ->
+							"${item.indexNumber}-${item.indexNumberEnd}"
+						else -> item.indexNumber?.toString().orEmpty()
+					}
+
+					when (item.type) {
+						"Movie" ->
+							PreviewProgram.Builder()
+									.setChannelId(ContentUris.parseId(channelUri))
+									.setType(WatchNextPrograms.TYPE_MOVIE)
+									.setTitle(item.name)
+									.setDescription(if (item.taglines != null && item.taglines!!.size > 0) item.taglines!![0] else "")
+									.setPosterArtUri(imageUri)
+									.setPosterArtAspectRatio(TvContractCompat.PreviewPrograms.ASPECT_RATIO_MOVIE_POSTER)
+									.setIntent(Intent(context, StartupActivity::class.java).apply {
+										putExtra(StartupActivity.EXTRA_ITEM_ID, item.id.toString())
+									})
+									.build()
+									.toContentValues()
+						"Episode" ->
+							PreviewProgram.Builder()
+									.setChannelId(ContentUris.parseId(channelUri))
+									.setType(WatchNextPrograms.TYPE_TV_EPISODE)
+									.setTitle(item.seriesName)
+									.setEpisodeTitle(item.name)
+									.setSeasonNumber(seasonString, item.parentIndexNumber ?: 0)
+									.setEpisodeNumber(episodeString, item.indexNumber ?: 0)
+									.setPosterArtUri(imageUri)
+									.setPosterArtAspectRatio(TvContractCompat.PreviewPrograms.ASPECT_RATIO_16_9)
+									.setIntent(Intent(context, StartupActivity::class.java).apply {
+										putExtra(StartupActivity.EXTRA_ITEM_ID, item.id.toString())
+									})
+									.build()
+									.toContentValues()
+						"Series" ->
+							PreviewProgram.Builder()
+									.setChannelId(ContentUris.parseId(channelUri))
+									.setType(WatchNextPrograms.TYPE_TV_SERIES)
+									.setTitle(item.name)
+									.setPosterArtUri(imageUri)
+									.setPosterArtAspectRatio(TvContractCompat.PreviewPrograms.ASPECT_RATIO_MOVIE_POSTER)
+									.setIntent(Intent(context, StartupActivity::class.java).apply {
+										putExtra(StartupActivity.EXTRA_ITEM_ID, item.id.toString())
+									})
+									.build()
+									.toContentValues()
+						"MusicAlbum" ->
+							PreviewProgram.Builder()
+									.setChannelId(ContentUris.parseId(channelUri))
+									.setType(WatchNextPrograms.TYPE_ALBUM)
+									.setTitle(item.name)
+									.setDescription(if (item.albumArtist != null) item.albumArtist else "")
+									.setPosterArtUri(imageUri)
+									.setPosterArtAspectRatio(TvContractCompat.PreviewPrograms.ASPECT_RATIO_1_1)
+									.setIntent(Intent(context, StartupActivity::class.java).apply {
+										putExtra(StartupActivity.EXTRA_ITEM_ID, item.id.toString())
+									})
+									.build()
+									.toContentValues()
+						"MusicArtist" ->
+							PreviewProgram.Builder()
+									.setChannelId(ContentUris.parseId(channelUri))
+									.setType(WatchNextPrograms.TYPE_ARTIST)
+									.setTitle(item.name)
+									.setPosterArtUri(imageUri)
+									.setPosterArtAspectRatio(TvContractCompat.PreviewPrograms.ASPECT_RATIO_1_1)
+									.setIntent(Intent(context, StartupActivity::class.java).apply {
+										putExtra(StartupActivity.EXTRA_ITEM_ID, item.id.toString())
+									})
+									.build()
+									.toContentValues()
+						"PhotoAlbum" ->
+							PreviewProgram.Builder()
+									.setChannelId(ContentUris.parseId(channelUri))
+									.setType(WatchNextPrograms.TYPE_ALBUM)
+									.setTitle(item.name)
+									.setPosterArtUri(imageUri)
+									.setIntent(Intent(context, StartupActivity::class.java).apply {
+										putExtra(StartupActivity.EXTRA_ITEM_ID, item.id.toString())
+									})
+									.build()
+									.toContentValues()
+						else -> null
+					}
+				}?.filterNotNull()?.let { context.contentResolver.bulkInsert(TvContractCompat.PreviewPrograms.CONTENT_URI, it.toTypedArray()) }
+			}
+		}
+	}
+
+
+	/**
 	 * Gets the poster art for an item. Uses the [preferParentThumb] parameter to fetch the series
 	 * image when preferred.
 	 */
@@ -169,15 +320,15 @@ class LeanbackChannelWorker(
 			itemId = parentThumbItemId!!.toUUIDOrNull()!!,
 			imageType = ImageType.THUMB,
 			format = ImageFormat.WEBP,
-			width = 512,
-			height = 288
+			maxHeight = 512,
+			maxWidth = 512
 		)
 		else -> imageApi.getItemImageUrl(
 			itemId = id,
 			imageType = ImageType.PRIMARY,
 			format = ImageFormat.WEBP,
-			width = 512,
-			height = 288
+			maxHeight = 512,
+			maxWidth = 512
 		)
 	}.let(Uri::parse)
 
