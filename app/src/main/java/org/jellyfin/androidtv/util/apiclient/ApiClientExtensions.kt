@@ -8,6 +8,8 @@ import org.jellyfin.apiclient.model.dto.BaseItemDto
 import org.jellyfin.apiclient.model.dto.UserDto
 import org.jellyfin.apiclient.model.querying.ItemsResult
 import org.jellyfin.apiclient.model.querying.NextUpQuery
+import org.jellyfin.apiclient.model.querying.LatestItemsQuery
+
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
 
@@ -17,6 +19,16 @@ import kotlin.coroutines.suspendCoroutine
 suspend fun ApiClient.getNextUpEpisodes(query: NextUpQuery): ItemsResult? = suspendCoroutine { continuation ->
 	GetNextUpEpisodesAsync(query, object : Response<ItemsResult>() {
 		override fun onResponse(response: ItemsResult?) = continuation.resume(response!!)
+		override fun onError(exception: Exception?) = continuation.resume(null)
+	})
+}
+
+/**
+ * Coroutine capable version of the "getLatestItems" function
+ */
+suspend fun ApiClient.getLatestItems(query: LatestItemsQuery): Array<BaseItemDto>? = suspendCoroutine { continuation ->
+	GetLatestItems(query, object : Response<Array<BaseItemDto>>() {
+		override fun onResponse(response: Array<BaseItemDto>?) = continuation.resume(response!!)
 		override fun onError(exception: Exception?) = continuation.resume(null)
 	})
 }
