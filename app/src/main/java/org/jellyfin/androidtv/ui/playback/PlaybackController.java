@@ -602,11 +602,12 @@ public class PlaybackController {
 
         // Force VLC when media is not live TV and the preferred player is VLC
         boolean forceVlc = !isLiveTv && userPreferences.getValue().get(UserPreferences.Companion.getVideoPlayer()) == PreferredVideoPlayer.VLC;
-        boolean forceLocal = !isLiveTv && userPreferences.getValue().get(UserPreferences.Companion.getVideoPlayerSendPath());
+        boolean forceLocal = false;
 
         if (forceVlc || (useVlc && (!getPlaybackMethod().equals(PlayMethod.Transcode) || isLiveTv))) {
             Timber.i("Playing back in VLC.");
             mVideoManager.setNativeMode(false);
+            forceLocal = !isLiveTv && userPreferences.getValue().get(UserPreferences.Companion.getVideoPlayerSendPath());
         } else {
             mVideoManager.setNativeMode(true);
             Timber.i("Playing back in native mode.");
