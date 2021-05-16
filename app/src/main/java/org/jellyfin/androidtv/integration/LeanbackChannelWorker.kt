@@ -30,9 +30,7 @@ import org.jellyfin.apiclient.model.dto.ImageOptions
 import org.jellyfin.apiclient.model.entities.ImageType
 import org.jellyfin.apiclient.model.entities.LocationType
 import org.jellyfin.apiclient.model.entities.MediaType
-import org.jellyfin.apiclient.model.querying.ItemFields
-import org.jellyfin.apiclient.model.querying.ItemsResult
-import org.jellyfin.apiclient.model.querying.NextUpQuery
+import org.jellyfin.apiclient.model.querying.*
 import org.koin.core.component.KoinApiExtension
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
@@ -233,7 +231,7 @@ class LeanbackChannelWorker(
 									.setPosterArtUri(imageUri)
 									.setPosterArtAspectRatio(TvContractCompat.PreviewPrograms.ASPECT_RATIO_MOVIE_POSTER)
 									.setIntent(Intent(context, StartupActivity::class.java).apply {
-										putExtra(StartupActivity.ITEM_ID, item.id)
+										putExtra(StartupActivity.EXTRA_ITEM_ID, item.id)
 									})
 									.build()
 									.toContentValues()
@@ -248,7 +246,7 @@ class LeanbackChannelWorker(
 									.setPosterArtUri(imageUri)
 									.setPosterArtAspectRatio(TvContractCompat.PreviewPrograms.ASPECT_RATIO_16_9)
 									.setIntent(Intent(context, StartupActivity::class.java).apply {
-										putExtra(StartupActivity.ITEM_ID, item.id)
+										putExtra(StartupActivity.EXTRA_ITEM_ID, item.id)
 									})
 									.build()
 									.toContentValues()
