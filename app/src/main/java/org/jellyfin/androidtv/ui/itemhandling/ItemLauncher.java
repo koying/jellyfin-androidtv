@@ -43,9 +43,81 @@ import java.util.List;
 
 import timber.log.Timber;
 
+import static org.jellyfin.androidtv.ui.startup.StartupActivity.EXTRA_ITEM_ID;
+import static org.koin.java.KoinJavaComponent.get;
+
 public class ItemLauncher {
     public static void launch(BaseRowItem rowItem, ItemRowAdapter adapter, int pos, final Activity activity) {
         launch(rowItem, adapter, pos, activity, false);
+    }
+
+    public static void launchItem(final BaseItemDto baseItem, final Activity activity, final boolean finishParent) {
+        switch (baseItem.getBaseItemType()) {
+            case UserView:
+            case CollectionFolder:
+                launchUserView(baseItem, activity, false);
+                return;
+
+            case MusicAlbum:
+            case Playlist:
+                //Start activity for song list display
+                Intent songListIntent = new Intent(activity, ItemListActivity.class);
+                songListIntent.putExtra(EXTRA_ITEM_ID, baseItem.getId());
+                activity.startActivity(songListIntent);
+
+                if (finishParent) activity.finish();
+                return;
+
+            case Season:
+            case RecordingGroup:
+                //Start activity for enhanced browse
+                Intent seasonIntent = new Intent(activity, GenericFolderActivity.class);
+                seasonIntent.putExtra(Extras.Folder, get(GsonJsonSerializer.class).SerializeToString(baseItem));
+                activity.startActivity(seasonIntent);
+
+                if (finishParent) activity.finish();
+                return;
+
+            case BoxSet:
+                // open collection browsing
+                Intent collectionIntent = new Intent(activity, CollectionActivity.class);
+                collectionIntent.putExtra(Extras.Folder, get(GsonJsonSerializer.class).SerializeToString(baseItem));
+                activity.startActivity(collectionIntent);
+                return;
+
+            case Photo:
+                // open photo player
+                // TODO
+                // get(MediaManager.class).setCurrentMediaPosition(pos);
+                Intent photoIntent = new Intent(activity, PhotoPlayerActivity.class);
+                activity.startActivity(photoIntent);
+
+                if (finishParent) activity.finish();
+                return;
+
+            default:
+                // or generic handling
+                if (baseItem.getIsFolderItem()) {
+                    // open generic folder browsing - but need display prefs
+                    TvApp.getApplication().getDisplayPrefsAsync(baseItem.getDisplayPreferencesId(), new Response<DisplayPreferences>() {
+                        @Override
+                        public void onResponse(DisplayPreferences response) {
+                            Intent intent = new Intent(activity, GenericGridActivity.class);
+                            intent.putExtra(Extras.Folder, get(GsonJsonSerializer.class).SerializeToString(baseItem));
+                            activity.startActivity(intent);
+
+                        }
+                    });
+                } else {
+                    // Open item details
+                    Intent detailsIntent = new Intent(activity, FullDetailsActivity.class);
+                    detailsIntent.putExtra(EXTRA_ITEM_ID, baseItem.getId());
+                    activity.startActivity(detailsIntent);
+                }
+
+                if (finishParent) activity.finish();
+                return;
+        }
     }
 
     public static void createUserViewIntent(final BaseItemDto baseItem, final Context context, final Consumer<Intent> callback) {
