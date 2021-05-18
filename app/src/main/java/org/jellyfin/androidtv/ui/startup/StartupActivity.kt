@@ -102,23 +102,13 @@ class StartupActivity : FragmentActivity(R.layout.fragment_content_view) {
 		(application as? JellyfinApplication)?.onSessionStart()
 
 		if (itemId != null) {
-			if (itemIsUserView) {
-				// Try opening the user view
-				val item = callApi<BaseItemDto?> { apiClient.GetItemAsync(itemId, apiClient.currentUserId, it) }
-
-				if (item != null) {
-					ItemLauncher.launchUserView(item, this, true)
-					finish()
-					return
+			val item = callApi<BaseItemDto?> { apiClient.GetItemAsync(itemId, apiClient.currentUserId, it) }
+			if (item != null) {
+				when {
+					itemIsUserView -> ItemLauncher.launchUserView(item, this, true)
+					else -> ItemLauncher.launchItem(item, this, true)
 				}
-			} else {
-				// Open item details
-				val detailsIntent = Intent(this, FullDetailsActivity::class.java).apply {
-					putExtra(EXTRA_ITEM_ID, itemId)
-				}
-
-				startActivity(detailsIntent)
-				finishAfterTransition()
+				finish()
 				return
 			}
 		}
