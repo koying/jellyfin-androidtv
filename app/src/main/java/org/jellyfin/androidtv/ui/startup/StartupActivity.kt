@@ -114,34 +114,19 @@ class StartupActivity : FragmentActivity(R.layout.fragment_content_view) {
 		// Start session
 		(application as? JellyfinApplication)?.onSessionStart()
 
-		// Create intent
-		val intent = when {
-			// Item is requested
-			itemId != null -> when {
-				// Item is a user view - need to get info from API and create the intent
-				// using the ItemLauncher
-				itemIsUserView -> callApi<BaseItemDto?> {
-					apiClient.GetItemAsync(itemId, apiClient.currentUserId, it)
-				}?.let { item ->
-					suspendCoroutine { continuation ->
-						ItemLauncher.createUserViewIntent(item, this) { intent ->
-							continuation.resume(intent)
-						}
-					}
+		if (itemId != null) {
+			val item = callApi<BaseItemDto?> { apiClient.GetItemAsync(itemId, apiClient.currentUserId, it) }
+			if (item != null) {
+				when {
+					itemIsUserView -> ItemLauncher.launchUserView(item, this, true)
+					else -> ItemLauncher.launchItem(item, this, true)
 				}
-				// Item is not a user view
-				else -> Intent(this, FullDetailsActivity::class.java).apply {
-					putExtra(EXTRA_ITEM_ID, itemId)
-				}
+				finish()
+				return
 			}
-			// Launch default
-			else -> null
-		} ?: Intent(this, MainActivity::class.java)
+		}
 
-
-		// Clear navigation history
-		intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_TASK_ON_HOME)
-		Timber.d("Opening next activity $intent")
+		val intent = Intent(this, MainActivity::class.java)
 		startActivity(intent)
 		finishAfterTransition()
 	}
