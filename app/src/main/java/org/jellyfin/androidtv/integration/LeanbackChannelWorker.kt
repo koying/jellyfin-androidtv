@@ -250,6 +250,43 @@ class LeanbackChannelWorker(
 									})
 									.build()
 									.toContentValues()
+						"Series" ->
+							PreviewProgram.Builder()
+									.setChannelId(ContentUris.parseId(channelUri))
+									.setType(WatchNextPrograms.TYPE_TV_SERIES)
+									.setTitle(item.name)
+									.setPosterArtUri(imageUri)
+									.setPosterArtAspectRatio(TvContractCompat.PreviewPrograms.ASPECT_RATIO_MOVIE_POSTER)
+									.setIntent(Intent(context, StartupActivity::class.java).apply {
+										putExtra(StartupActivity.EXTRA_ITEM_ID, item.id)
+									})
+									.build()
+									.toContentValues()
+						"MusicAlbum" ->
+							PreviewProgram.Builder()
+									.setChannelId(ContentUris.parseId(channelUri))
+									.setType(WatchNextPrograms.TYPE_ALBUM)
+									.setTitle(item.name)
+									.setDescription(if (item.albumArtist != null) item.albumArtist else "")
+									.setPosterArtUri(imageUri)
+									.setPosterArtAspectRatio(TvContractCompat.PreviewPrograms.ASPECT_RATIO_1_1)
+									.setIntent(Intent(context, StartupActivity::class.java).apply {
+										putExtra(StartupActivity.EXTRA_ITEM_ID, item.id)
+									})
+									.build()
+									.toContentValues()
+						"MusicArtist" ->
+							PreviewProgram.Builder()
+									.setChannelId(ContentUris.parseId(channelUri))
+									.setType(WatchNextPrograms.TYPE_ARTIST)
+									.setTitle(item.name)
+									.setPosterArtUri(imageUri)
+									.setPosterArtAspectRatio(TvContractCompat.PreviewPrograms.ASPECT_RATIO_1_1)
+									.setIntent(Intent(context, StartupActivity::class.java).apply {
+										putExtra(StartupActivity.EXTRA_ITEM_ID, item.id)
+									})
+									.build()
+									.toContentValues()
 						else -> null
 					}
 				}?.filterNotNull()?.let { context.contentResolver.bulkInsert(TvContractCompat.PreviewPrograms.CONTENT_URI, it.toTypedArray()) }
