@@ -84,7 +84,7 @@ class StartupActivity : FragmentActivity(R.layout.fragment_content_view) {
 			if (session != null) {
 				Timber.i("Found a session in the session repository, waiting for the currentUser in the application class.")
 
-				showSplash()
+				//showSplash()
 
 				(application as? TvApp)?.currentUserLiveData?.observe(this) { currentUser ->
 					Timber.i("CurrentUser changed to ${currentUser?.id} while waiting for startup.")
