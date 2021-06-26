@@ -73,7 +73,7 @@ class MediaContentProvider : ContentProvider(), KoinComponent {
 	 */
 	private suspend fun searchItems(query: String, qLimit: Int): BaseItemDtoQueryResult? {
 		// Get user or return if no user is found (not authenticated)
-		val userId = TvApp.getApplication().currentUser?.id?.toUUIDOrNull() ?: return null
+		val userId = TvApp.getApplication()?.currentUser?.id?.toUUIDOrNull() ?: return null
 
 		return itemsApi.getItems(
 				recursive = true,
