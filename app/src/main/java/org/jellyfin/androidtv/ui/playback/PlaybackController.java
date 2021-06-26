@@ -605,13 +605,16 @@ public class PlaybackController {
     protected static String prepareLocalPath(String rawPath) {
         if (rawPath == null) return "";
         String lower = rawPath.toLowerCase();
-        if (!rawPath.contains("://")) {
+        if (rawPath.startsWith("\\\\")) {
             rawPath = rawPath.replace("\\\\",""); // remove UNC prefix if there
             //prefix with smb
             rawPath = "smb://"+rawPath;
         }
 
-        return rawPath.replaceAll("\\\\","/");
+        if (rawPath.startsWith("/"))
+            return "";
+
+        return rawPath;
     }
 
     private void startItem(BaseItemDto item, long position, StreamInfo response) {
@@ -647,6 +650,10 @@ public class PlaybackController {
 
         mFragment.updateDisplay();
         String path = forceLocal ? prepareLocalPath(response.getMediaSource().getPath()) : response.getMediaUrl();
+        if (path == "") {
+            forceLocal = false;
+            path = response.getMediaUrl();
+        }
         if (forceLocal)
             setPlaybackMethod(PlayMethod.DirectPlay);
 
