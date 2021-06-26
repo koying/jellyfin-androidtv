@@ -51,6 +51,9 @@ import org.jellyfin.apiclient.model.livetv.ChannelInfoDto;
 import org.jellyfin.apiclient.model.mediainfo.SubtitleTrackInfo;
 import org.jellyfin.apiclient.model.session.PlayMethod;
 
+import java.io.UnsupportedEncodingException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -616,10 +619,22 @@ public class PlaybackController {
         if (rawPath.startsWith("\\\\")) {
             rawPath = rawPath.replace("\\\\",""); // remove UNC prefix if there
             //prefix with smb
-            rawPath = "smb://"+rawPath;
+            rawPath = "smb://" + rawPath.replace("\\","/");
+        }
+        else if (rawPath.startsWith("http"))
+        {
+            try
+            {
+                rawPath = URLEncoder.encode(rawPath, StandardCharsets.UTF_8.toString());
+            }
+            catch (UnsupportedEncodingException e)
+            {
+                e.printStackTrace();
+                return "";
+            }
         }
 
-        if (rawPath.startsWith("/"))
+        if (!rawPath.contains("://"))
             return "";
 
         return rawPath;
