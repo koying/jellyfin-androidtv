@@ -13,6 +13,7 @@ import androidx.tvprovider.media.tv.TvContractCompat.WatchNextPrograms
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import org.jellyfin.androidtv.R
+import org.jellyfin.androidtv.TvApp
 import org.jellyfin.androidtv.di.systemApiClient
 import org.jellyfin.androidtv.preference.UserPreferences
 import org.jellyfin.androidtv.ui.itemhandling.ItemRowAdapter
@@ -25,6 +26,7 @@ import org.jellyfin.apiclient.model.querying.ItemSortBy
 import org.jellyfin.sdk.api.client.KtorClient
 import org.jellyfin.sdk.api.operations.*
 import org.jellyfin.sdk.model.api.*
+import org.jellyfin.sdk.model.serializer.toUUID
 import org.jellyfin.sdk.model.serializer.toUUIDOrNull
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
@@ -177,10 +179,10 @@ class LeanbackChannelWorker(
 		val EXCLUDED_COLLECTION_TYPES = arrayOf("playlists", "livetv", "boxsets", "channels", "books")
 
 		// Get user or return if no user is found (not authenticated)
-		val configuration = TvApp.getApplication().currentUser!!.configuration
+		val configuration = TvApp.getApplication()?.currentUser!!.configuration
 		val latestItemsExcludes = configuration.latestItemsExcludes
 
-		val user = TvApp.getApplication().currentUser ?: return null
+		val user = TvApp.getApplication()?.currentUser ?: return null
 		val views by userViewsApi.getUserViews(user.id.toUUID(), includeHidden = false)
 
 		return buildMap {
@@ -190,7 +192,7 @@ class LeanbackChannelWorker(
 				.forEach { item ->
 					// Create query and add it to a new row
 					val items = userLibrarypi.getLatestMedia(
-							userId = TvApp.getApplication().currentUser?.id?.toUUIDOrNull() ?: return null,
+							userId = TvApp.getApplication()!!.currentUser?.id?.toUUIDOrNull() ?: return null,
 							imageTypeLimit = 1,
 							limit = 25,
 							fields = listOf(ItemFields.DATE_CREATED, ItemFields.TAGLINES),
@@ -351,7 +353,7 @@ class LeanbackChannelWorker(
 	 */
 	private suspend fun getResumeItems(): BaseItemDtoQueryResult? {
 		// Get user or return if no user is found (not authenticated)
-		val userId = TvApp.getApplication().currentUser?.id?.toUUIDOrNull() ?: return null
+		val userId = TvApp.getApplication()?.currentUser?.id?.toUUIDOrNull() ?: return null
 
 		return itemsApi.getItems(
 				mediaTypes = listOf(MediaType.Video),
