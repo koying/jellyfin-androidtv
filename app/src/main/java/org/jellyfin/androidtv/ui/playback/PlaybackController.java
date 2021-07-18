@@ -53,6 +53,8 @@ import org.jellyfin.apiclient.model.session.PlayMethod;
 import org.koin.java.KoinJavaComponent;
 
 import java.io.UnsupportedEncodingException;
+import java.net.URI;
+import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -617,14 +619,17 @@ public class PlaybackController {
         {
             try
             {
-                rawPath = URLEncoder.encode(rawPath, StandardCharsets.UTF_8.toString());
+                URL url = new URL(rawPath);
+                URI uri = new URI(url.getProtocol(), url.getUserInfo(), url.getHost(), url.getPort(), url.getPath(), url.getQuery(), url.getRef());
+                rawPath = uri.toString();
             }
-            catch (UnsupportedEncodingException e)
+            catch (Exception e)
             {
                 e.printStackTrace();
                 return "";
             }
         }
+        Timber.d("prepareLocalPath: %s", rawPath);
 
         if (!rawPath.contains("://"))
             return "";
@@ -827,6 +832,7 @@ public class PlaybackController {
     }
 
     public void pause() {
+        Timber.d("PAUSED");
         mPlaybackState = PlaybackState.PAUSED;
         mVideoManager.pause();
         if (mFragment != null) {
