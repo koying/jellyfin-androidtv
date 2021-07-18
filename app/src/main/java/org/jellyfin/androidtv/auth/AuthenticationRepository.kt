@@ -131,7 +131,7 @@ class AuthenticationRepositoryImpl(
 		}
 
 		if (server == null) emit(RequireSignInState)
-		else if (!server.versionSupported) emit(ServerVersionNotSupported(server))
+		//else if (!server.versionSupported) emit(ServerVersionNotSupported(server))
 		else emitAll(authenticateUser(user, server))
 	}
 
@@ -142,7 +142,7 @@ class AuthenticationRepositoryImpl(
 
 		val account = accountManagerHelper.getAccount(user.id)
 		when {
-			!server.versionSupported -> emit(ServerVersionNotSupported(server))
+			//!server.versionSupported -> emit(ServerVersionNotSupported(server))
 			// Access token found, proceed with sign in
 			!authenticationPreferences[AuthenticationPreferences.alwaysAuthenticate] && account?.accessToken != null -> when {
 				// Update session
@@ -187,10 +187,11 @@ class AuthenticationRepositoryImpl(
 
 	@OptIn(ExperimentalCoroutinesApi::class)
 	override fun login(server: Server, username: String, password: String) = flow {
-		if (!server.versionSupported) {
+/* 		if (!server.versionSupported) {
 			emit(ServerVersionNotSupported(server))
 			return@flow
 		}
+ */
 
 		val api = jellyfin.createApi(server.address, deviceInfo = AuthenticationDevice(device, username).toDeviceInfo())
 		val userApi = UserApi(api)
