@@ -19,14 +19,12 @@ import org.jellyfin.sdk.api.operations.ImageApi
 import org.jellyfin.sdk.api.operations.ItemsApi
 import org.jellyfin.sdk.model.api.*
 import org.jellyfin.sdk.model.serializer.toUUIDOrNull
-import org.koin.core.component.KoinApiExtension
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 import timber.log.Timber
 import java.text.SimpleDateFormat
 
 
-@KoinApiExtension
 class MediaContentProvider : ContentProvider(), KoinComponent {
 
 	companion object {

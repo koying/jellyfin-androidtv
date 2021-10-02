@@ -72,7 +72,7 @@ public class ItemLauncher {
             case RecordingGroup:
                 //Start activity for enhanced browse
                 Intent seasonIntent = new Intent(activity, GenericFolderActivity.class);
-                seasonIntent.putExtra(Extras.Folder, get(GsonJsonSerializer.class).SerializeToString(baseItem));
+                seasonIntent.putExtra(Extras.Folder, KoinJavaComponent.<GsonJsonSerializer>get(GsonJsonSerializer.class).SerializeToString(baseItem));
                 activity.startActivity(seasonIntent);
 
                 if (finishParent) activity.finish();
@@ -81,7 +81,7 @@ public class ItemLauncher {
             case BoxSet:
                 // open collection browsing
                 Intent collectionIntent = new Intent(activity, CollectionActivity.class);
-                collectionIntent.putExtra(Extras.Folder, get(GsonJsonSerializer.class).SerializeToString(baseItem));
+                collectionIntent.putExtra(Extras.Folder, KoinJavaComponent.<GsonJsonSerializer>get(GsonJsonSerializer.class).SerializeToString(baseItem));
                 activity.startActivity(collectionIntent);
                 return;
 
@@ -103,7 +103,7 @@ public class ItemLauncher {
                         @Override
                         public void onResponse(DisplayPreferences response) {
                             Intent intent = new Intent(activity, GenericGridActivity.class);
-                            intent.putExtra(Extras.Folder, get(GsonJsonSerializer.class).SerializeToString(baseItem));
+                            intent.putExtra(Extras.Folder, KoinJavaComponent.<GsonJsonSerializer>get(GsonJsonSerializer.class).SerializeToString(baseItem));
                             activity.startActivity(intent);
 
                         }
