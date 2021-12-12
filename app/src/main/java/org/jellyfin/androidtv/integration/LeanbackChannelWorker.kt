@@ -357,10 +357,7 @@ class LeanbackChannelWorker(
 				imageTypeLimit = 1,
 				limit = 10,
 				mediaTypes = listOf(MediaType.Video)
-			).content.items.orEmpty().filter { item ->
-				// Movies are not supported right now
-				item.type.equals(BaseItemType.Episode.toString(), true)
-			}
+			).content.items.orEmpty()
 		}
 
 		val nextup = async {
@@ -437,26 +434,40 @@ class LeanbackChannelWorker(
 	}
 
 	/**
-	 * Convert [BaseItemDto] to [WatchNextProgram]. Assumes the item type is "episode".
+	 * Convert [BaseItemDto] to [WatchNextProgram].
 	 */
 	@Suppress("RestrictedApi")
 	private fun getBaseItemAsWatchNextProgram(item: BaseItemDto) = WatchNextProgram.Builder().apply {
 		val preferParentThumb = userPreferences[UserPreferences.seriesThumbnailsEnabled]
 
 		setInternalProviderId(item.id.toString())
-		setType(WatchNextPrograms.TYPE_TV_EPISODE)
-		setTitle("${item.seriesName} - ${item.name}")
+		when (item.type) {
+			"Movie" -> {
+				setType(WatchNextPrograms.TYPE_MOVIE)
+				setTitle("${item.name}")
 
-		// Poster image
-		val imageUri = item.getPosterArtImageUrl(preferParentThumb)
-		setPosterArtUri(imageUri)
-		setPosterArtAspectRatio(WatchNextPrograms.ASPECT_RATIO_16_9)
+				// Poster image
+				val imageUri = item.getPosterArtImageUrl(false)
+				setPosterArtUri(imageUri)
+				setPosterArtAspectRatio(WatchNextPrograms.ASPECT_RATIO_MOVIE_POSTER)
+			}
+
+			else -> {
+				setType(WatchNextPrograms.TYPE_TV_EPISODE)
+				setTitle("${item.seriesName} - ${item.name}")
+
+				// Poster image
+				val imageUri = item.getPosterArtImageUrl(preferParentThumb)
+				setPosterArtUri(imageUri)
+				setPosterArtAspectRatio(WatchNextPrograms.ASPECT_RATIO_16_9)
+			}
+		}
 
 		// Use date created or fallback to current time if unavailable
 		var engagement = item.dateCreated
 
 		when {
-			// User has started playing the episode
+			// User has started playing the item
 			item.userData?.playbackPositionTicks ?: 0 > 0 -> {
 				setWatchNextType(WatchNextPrograms.WATCH_NEXT_TYPE_CONTINUE)
 				setLastPlaybackPositionMillis((item.userData!!.playbackPositionTicks / TICKS_IN_MILLISECOND).toInt())
