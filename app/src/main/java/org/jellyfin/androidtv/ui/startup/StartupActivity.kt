@@ -78,6 +78,13 @@ class StartupActivity : FragmentActivity(R.layout.fragment_content_view) {
 		networkPermissionsRequester.launch(arrayOf(Manifest.permission.INTERNET, Manifest.permission.ACCESS_NETWORK_STATE))
 	}
 
+	override fun onNewIntent(intent: Intent?) {
+		super.onNewIntent(intent)
+
+		setIntent(intent);
+		onPermissionsGranted();
+	}
+
 	private fun onPermissionsGranted() {
 		var isLoaded = false
 
@@ -109,9 +116,9 @@ class StartupActivity : FragmentActivity(R.layout.fragment_content_view) {
 	}
 
 	private suspend fun openNextActivity() {
-		val itemId = when {
-			intent.action == Intent.ACTION_VIEW && intent.data != null -> intent.data.toString()
-			else -> intent.getStringExtra(EXTRA_ITEM_ID)
+		val itemId = when (intent.hasExtra(EXTRA_ITEM_ID)) {
+			true -> intent.getStringExtra(EXTRA_ITEM_ID)
+			else -> if (intent.data != null) intent.data.toString() else null
 		}
 		val itemIsUserView = intent.getBooleanExtra(EXTRA_ITEM_IS_USER_VIEW, false)
 
