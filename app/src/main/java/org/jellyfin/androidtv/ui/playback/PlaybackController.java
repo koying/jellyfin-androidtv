@@ -969,7 +969,7 @@ public class PlaybackController {
                 case External:
                     if (mFragment != null) mFragment.addManualSubtitles(null);
                     mVideoManager.disableSubs();
-                    if (mFragment != null) mFragment.showSubLoadingMsg(true);
+                    if (mFragment != null) mFragment.showSubLoadingMsg(false);
                     stream.setDeliveryMethod(SubtitleDeliveryMethod.External);
                     stream.setDeliveryUrl(String.format("%1$s/Videos/%2$s/%3$s/Subtitles/%4$s/0/Stream.JSON", apiClient.getValue().getApiUrl(), mCurrentStreamInfo.getItemId(), mCurrentStreamInfo.getMediaSourceId(), String.valueOf(stream.getIndex())));
                     apiClient.getValue().getSubtitles(stream.getDeliveryUrl(), new Response<SubtitleTrackInfo>() {
