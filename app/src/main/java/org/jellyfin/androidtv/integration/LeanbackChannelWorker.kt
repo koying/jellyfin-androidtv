@@ -80,7 +80,6 @@ class LeanbackChannelWorker(
 	/**
 	 * Update all channels for the currently authenticated user.
 	 */
-	@ExperimentalStdlibApi
 	override suspend fun doWork(): Result = when {
 		// Fail when not supported
 		!isSupported -> Result.failure()
@@ -183,7 +182,6 @@ class LeanbackChannelWorker(
 	/**
 	 * Gets the latest items or returns null
 	 */
-	@ExperimentalStdlibApi
 	private suspend fun getLatestItems(): Map<String, List<BaseItemDto>?>? {
 		val EXCLUDED_COLLECTION_TYPES = arrayOf("playlists", "livetv", "boxsets", "channels", "books")
 
